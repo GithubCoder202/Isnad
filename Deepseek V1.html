@@ -1374,14 +1374,123 @@
                     </div>
                 </div>
                 
-                <!-- Google OAuth Login -->
-                <div id="g_id_onload"
-                    data-client_id="1080485775351-9hp0r6le8h76pusnqn0qoljndkpkpru2.apps.googleusercontent.com"
-                    data-context="signin"
-                    data-ux_mode="popup"
-                    data-callback="handleCredentialResponse"
-                    data-auto_prompt="false">
-                </div>
+                // Authentication functions
+async function registerUser(email, password, name) {
+    try {
+        const response = await api.post('/auth/register', { email, password, name });
+        setAuthData(response.data.token, response.data.user);
+        updateUIAfterLogin();
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+}
+
+async function loginUser(email, password) {
+    try {
+        const response = await api.post('/auth/login', { email, password });
+        setAuthData(response.data.token, response.data.user);
+        updateUIAfterLogin();
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+}
+
+function setAuthData(token, user) {
+    authToken = token;
+    currentUser = user;
+    localStorage.setItem('authToken', token);
+    localStorage.setItem('currentUser', JSON.stringify(user));
+    api.defaults.headers['Authorization'] = `Bearer ${token}`;
+}
+
+function logout() {
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('currentUser');
+    authToken = null;
+    currentUser = null;
+    delete api.defaults.headers['Authorization'];
+    updateUIAfterLogout();
+}
+
+// Google OAuth handler
+function handleCredentialResponse(response) {
+    const { credential } = response;
+    
+    // Send the credential to your backend
+    api.post('/auth/google', { googleToken: credential })
+        .then(res => {
+            setAuthData(res.data.token, res.data.user);
+            updateUIAfterLogin();
+        })
+        .catch(err => {
+            console.error('Google login failed:', err);
+            alert('Google login failed. Please try again.');
+        });
+}
+
+function updateUIAfterLogin() {
+    if (currentUser) {
+        // Update account tab
+        const accountAvatar = document.querySelector('.account-avatar');
+        const accountName = document.querySelector('.account-info h2');
+        const accountEmail = document.querySelector('.account-info p:nth-of-type(1)');
+        
+        accountName.textContent = currentUser.name;
+        accountEmail.textContent = currentUser.email;
+        
+        if (currentUser.avatar) {
+            accountAvatar.innerHTML = `<img src="${currentUser.avatar}" alt="User Avatar" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+        }
+        
+        // Show logout button
+        document.querySelector('.google-signin-container').innerHTML = `
+            <button onclick="logout()" class="logout-btn">
+                <i class="fas fa-sign-out-alt"></i> Logout
+            </button>
+        `;
+    }
+}
+
+function updateUIAfterLogout() {
+    // Reset account tab
+    document.querySelector('.account-avatar').innerHTML = '<i class="fas fa-user"></i>';
+    document.querySelector('.account-info h2').textContent = 'Guest User';
+    document.querySelector('.account-info p:nth-of-type(1)').textContent = 'Sign in to access all features';
+    
+    // Show login options
+    document.querySelector('.google-signin-container').innerHTML = `
+        <div id="g_id_onload"
+            data-client_id="YOUR_GOOGLE_CLIENT_ID"
+            data-context="signin"
+            data-ux_mode="popup"
+            data-callback="handleCredentialResponse"
+            data-auto_prompt="false">
+        </div>
+        <div class="g_id_signin"
+            data-type="standard"
+            data-shape="pill"
+            data-theme="filled_blue"
+            data-text="signin_with"
+            data-size="large"
+            data-logo_alignment="left"
+            data-width="300">
+        </div>
+    `;
+    
+    // Reinitialize Google button
+    if (window.google) {
+        google.accounts.id.initialize({
+            client_id: 'YOUR_GOOGLE_CLIENT_ID',
+            callback: handleCredentialResponse
+        });
+        google.accounts.id.renderButton(
+            document.querySelector('.g_id_signin'),
+            { theme: "filled_blue", size: "large" }
+        );
+    }
+}
 
                 <div class="g_id_signin"
                     data-type="standard"
